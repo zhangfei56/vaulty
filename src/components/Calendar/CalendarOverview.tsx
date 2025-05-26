@@ -69,6 +69,12 @@ const CalendarOverview: React.FC<Props> = ({ date, data }) => {
     );
   };
 
+  // 判断任务是否过期
+  const isOverdue = (todo: Todo) => {
+    if (!todo.dueDate || todo.completed) return false;
+    return new Date(todo.dueDate) < new Date();
+  };
+
   // 判断是否为周末
   const isWeekend = (day: Date | null) => {
     if (!day) return false;
@@ -108,10 +114,16 @@ const CalendarOverview: React.FC<Props> = ({ date, data }) => {
 
           const dayData = getDataForDate(day);
           const hasEntries = dayData.diaryEntries.length > 0;
-          const hasTodos = dayData.todos.length > 0;
-          const hasTodosDone = dayData.todos.some((todo) => todo.completed);
-          const hasTodosPending = dayData.todos.some((todo) => !todo.completed);
-          const dayOfWeek = day.getDay();
+          // const hasTodos = dayData.todos.length > 0;
+
+          // 计算更详细的任务状态
+          const completedTodos = dayData.todos.filter((todo) => todo.completed);
+          const overdueTodos = dayData.todos.filter((todo) => isOverdue(todo));
+          const pendingTodos = dayData.todos.filter(
+            (todo) => !todo.completed && !isOverdue(todo)
+          );
+
+          // const dayOfWeek = day.getDay();
 
           return (
             <div
@@ -138,13 +150,36 @@ const CalendarOverview: React.FC<Props> = ({ date, data }) => {
                 </span>
                 <div className="flex space-x-1">
                   {hasEntries && (
-                    <span className="w-3 h-3 rounded-full bg-blue-500"></span>
+                    <div className="relative group">
+                      <span className="w-3 h-3 rounded-full bg-blue-500"></span>
+                      <span className="absolute -top-6 right-0 bg-blue-100 text-blue-800 text-xs py-0.5 px-1.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity">
+                        {dayData.diaryEntries.length} 篇日记
+                      </span>
+                    </div>
                   )}
-                  {hasTodosDone && (
-                    <span className="w-3 h-3 rounded-full bg-green-500"></span>
+                  {completedTodos.length > 0 && (
+                    <div className="relative group">
+                      <span className="w-3 h-3 rounded-full bg-green-500"></span>
+                      <span className="absolute -top-6 right-0 bg-green-100 text-green-800 text-xs py-0.5 px-1.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity">
+                        {completedTodos.length} 已完成
+                      </span>
+                    </div>
                   )}
-                  {hasTodosPending && (
-                    <span className="w-3 h-3 rounded-full bg-red-500"></span>
+                  {overdueTodos.length > 0 && (
+                    <div className="relative group">
+                      <span className="w-3 h-3 rounded-full bg-red-500"></span>
+                      <span className="absolute -top-6 right-0 bg-red-100 text-red-800 text-xs py-0.5 px-1.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity">
+                        {overdueTodos.length} 已逾期
+                      </span>
+                    </div>
+                  )}
+                  {pendingTodos.length > 0 && (
+                    <div className="relative group">
+                      <span className="w-3 h-3 rounded-full bg-yellow-500"></span>
+                      <span className="absolute -top-6 right-0 bg-yellow-100 text-yellow-800 text-xs py-0.5 px-1.5 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity">
+                        {pendingTodos.length} 待完成
+                      </span>
+                    </div>
                   )}
                 </div>
               </div>
@@ -153,28 +188,45 @@ const CalendarOverview: React.FC<Props> = ({ date, data }) => {
                 {dayData.diaryEntries.slice(0, 1).map((entry) => (
                   <div
                     key={entry.id}
-                    className="truncate text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded"
+                    className="truncate bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 flex items-center"
                   >
-                    📝 {entry.title}
+                    <span className="mr-1">📓</span>
+                    <span className="truncate flex-1 text-blue-700">
+                      {entry.title}
+                    </span>
                   </div>
                 ))}
 
-                {dayData.todos.slice(0, 2).map((todo) => (
+                {dayData.todos.slice(0, 3).map((todo) => (
                   <div
                     key={todo.id}
-                    className={`truncate px-1.5 py-0.5 rounded ${
+                    className={`truncate px-1.5 py-0.5 rounded flex items-center 
+                    ${
                       todo.completed
-                        ? 'text-green-600 bg-green-50'
-                        : 'text-red-600 bg-red-50'
+                        ? 'bg-green-50 border border-green-100'
+                        : isOverdue(todo)
+                          ? 'bg-red-50 border border-red-100'
+                          : 'bg-yellow-50 border border-yellow-100'
                     }`}
                   >
-                    {todo.completed ? '✓' : '○'} {todo.title}
+                    <span className="mr-1">{todo.icon || '📝'}</span>
+                    <span
+                      className={`truncate flex-1 ${
+                        todo.completed
+                          ? 'text-green-700 line-through'
+                          : isOverdue(todo)
+                            ? 'text-red-700 font-medium'
+                            : 'text-yellow-700'
+                      }`}
+                    >
+                      {todo.title}
+                    </span>
                   </div>
                 ))}
 
-                {dayData.diaryEntries.length + dayData.todos.length > 3 && (
-                  <div className="text-gray-500 text-center text-xs bg-gray-100 rounded-full px-2 py-0.5 mt-1">
-                    +{dayData.diaryEntries.length + dayData.todos.length - 3}{' '}
+                {dayData.diaryEntries.length + dayData.todos.length > 4 && (
+                  <div className="text-gray-500 text-center text-xs bg-gray-100 rounded-full px-2 py-0.5 mt-1 border border-gray-200">
+                    +{dayData.diaryEntries.length + dayData.todos.length - 4}{' '}
                     更多...
                   </div>
                 )}
@@ -184,7 +236,7 @@ const CalendarOverview: React.FC<Props> = ({ date, data }) => {
         })}
       </div>
 
-      <div className="mt-6 flex justify-center space-x-6 text-sm">
+      <div className="mt-6 flex flex-wrap justify-center gap-3 text-sm">
         <div className="flex items-center">
           <span className="w-4 h-4 rounded-full bg-blue-500 inline-block mr-2"></span>
           <span>日记</span>
@@ -194,8 +246,12 @@ const CalendarOverview: React.FC<Props> = ({ date, data }) => {
           <span>已完成</span>
         </div>
         <div className="flex items-center">
+          <span className="w-4 h-4 rounded-full bg-yellow-500 inline-block mr-2"></span>
+          <span>待完成</span>
+        </div>
+        <div className="flex items-center">
           <span className="w-4 h-4 rounded-full bg-red-500 inline-block mr-2"></span>
-          <span>未完成</span>
+          <span>已逾期</span>
         </div>
       </div>
     </div>

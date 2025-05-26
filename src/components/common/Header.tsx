@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 
 const Header = () => {
   const location = useLocation();
-  const [statusBarHeight, setStatusBarHeight] = useState(0);
+  const [, setStatusBarHeight] = useState(0);
 
   // 设置页面标题
   const getPageTitle = (path: string) => {

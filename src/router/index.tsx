@@ -5,6 +5,7 @@ import TodoPage from '../pages/TodoPage';
 import CalendarPage from '../pages/CalendarPage';
 import StatsPage from '../pages/StatsPage';
 import SettingsPage from '../pages/SettingsPage';
+import MockDataPage from '../pages/MockDataPage';
 import Header from '../components/common/Header';
 import Footer from '../components/common/Footer';
 
@@ -22,6 +23,7 @@ const AppRouter = () => {
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/stats" element={<StatsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/mock-data" element={<MockDataPage />} />
             </Routes>
           </div>
         </main>

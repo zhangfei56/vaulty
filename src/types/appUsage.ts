@@ -57,6 +57,15 @@ export interface AppUsageStat {
 }
 
 /**
+ * 每小时应用使用统计
+ */
+export interface HourlyUsageStat {
+  hour: number; // 小时 (0-23)
+  totalDuration: number; // 该小时总使用时长(毫秒)
+  apps: AppUsageStat[]; // 该小时的应用使用统计
+}
+
+/**
  * 每日应用使用统计
  */
 export interface DailyUsageStat {

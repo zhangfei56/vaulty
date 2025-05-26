@@ -9,6 +9,46 @@ interface Props {
   onClose: () => void;
 }
 
+// 可用图标列表
+const availableIcons = [
+  '📝',
+  '📌',
+  '⭐',
+  '🔥',
+  '⚡',
+  '❗',
+  '📅',
+  '🏠',
+  '🛒',
+  '📚',
+  '💼',
+  '🎯',
+  '💻',
+  '📱',
+  '🎵',
+  '🍔',
+  '🏋️',
+  '🎮',
+  '🚗',
+  '✈️',
+  '💰',
+  '🏆',
+  '🎉',
+  '💡',
+  '🎁',
+  '📞',
+  '📧',
+  '🔧',
+  '🎨',
+  '🎥',
+  '🎬',
+  '🎤',
+  '🎧',
+  '🎵',
+  '🎶',
+  '🎹',
+];
+
 const TodoEditor: React.FC<Props> = ({ todo, onClose }) => {
   const dispatch = useDispatch();
   const isEditing = !!todo;
@@ -34,6 +74,8 @@ const TodoEditor: React.FC<Props> = ({ todo, onClose }) => {
   );
   const [tags, setTags] = useState<string[]>(todo?.tags || []);
   const [tagInput, setTagInput] = useState('');
+  const [selectedIcon, setSelectedIcon] = useState(todo?.icon || '📝');
+  const [showIconPicker, setShowIconPicker] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,6 +98,11 @@ const TodoEditor: React.FC<Props> = ({ todo, onClose }) => {
         }
       : undefined;
 
+    // 处理标签
+    const tagArray = tags
+      ? tags.map((tag) => tag.trim()).filter((tag) => tag)
+      : [];
+
     if (isEditing && todo) {
       const updatedTodo: Todo = {
         ...todo,
@@ -65,7 +112,8 @@ const TodoEditor: React.FC<Props> = ({ todo, onClose }) => {
         priority,
         isRecurring,
         recurringPattern,
-        tags,
+        tags: tagArray.length > 0 ? tagArray : undefined,
+        icon: selectedIcon,
         updatedAt: now,
       };
       dispatch(updateTodo(updatedTodo));
@@ -79,7 +127,8 @@ const TodoEditor: React.FC<Props> = ({ todo, onClose }) => {
         priority,
         isRecurring,
         recurringPattern,
-        tags,
+        tags: tagArray.length > 0 ? tagArray : undefined,
+        icon: selectedIcon,
         createdAt: now,
         updatedAt: now,
       };
@@ -129,14 +178,47 @@ const TodoEditor: React.FC<Props> = ({ todo, onClose }) => {
               <label className="block text-gray-700 mb-2" htmlFor="title">
                 标题 <span className="text-red-500">*</span>
               </label>
-              <input
-                id="title"
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded"
-                placeholder="任务标题"
-              />
+              <div className="flex items-center space-x-2">
+                <div
+                  className="relative"
+                  onMouseLeave={() => setShowIconPicker(false)}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setShowIconPicker(!showIconPicker)}
+                    className="w-10 h-10 flex items-center justify-center text-xl bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    {selectedIcon}
+                  </button>
+                  {showIconPicker && (
+                    <div className="absolute z-10 mt-1 bg-white border rounded-lg shadow-lg p-2 grid grid-cols-7 gap-1 w-64">
+                      {availableIcons.map((icon) => (
+                        <button
+                          key={icon}
+                          type="button"
+                          onClick={() => {
+                            setSelectedIcon(icon);
+                            setShowIconPicker(false);
+                          }}
+                          className={`w-8 h-8 flex items-center justify-center text-lg rounded hover:bg-gray-100 ${
+                            selectedIcon === icon ? 'bg-blue-100' : ''
+                          }`}
+                        >
+                          {icon}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <input
+                  id="title"
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-l"
+                  placeholder="任务标题"
+                />
+              </div>
             </div>
 
             <div className="mb-4">

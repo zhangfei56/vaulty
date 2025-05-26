@@ -1,16 +1,23 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { format, subDays } from 'date-fns';
-import { AppUsageStat, DailyUsageStat } from '../types/appUsage';
+import {
+  AppUsageStat,
+  DailyUsageStat,
+  HourlyUsageStat,
+} from '../types/appUsage';
 import { appUsageService } from '../services/appUsageService';
 
 // 状态接口定义
 interface StatsState {
   appUsageStats: AppUsageStat[];
   dailyStats: DailyUsageStat[];
+  hourlyStats: HourlyUsageStat[];
+  dailyTopApps: AppUsageStat[];
   selectedDateRange: {
     startDate: string;
     endDate: string;
   };
+  selectedDate: string; // 当前选择的日期，用于小时统计和每日应用排行
   totalUsageTime: number;
   mostUsedApps: AppUsageStat[];
   syncStatus: {
@@ -27,10 +34,13 @@ interface StatsState {
 const initialState: StatsState = {
   appUsageStats: [],
   dailyStats: [],
+  hourlyStats: [],
+  dailyTopApps: [],
   selectedDateRange: {
     startDate: format(subDays(new Date(), 7), 'yyyy-MM-dd'),
     endDate: format(new Date(), 'yyyy-MM-dd'),
   },
+  selectedDate: format(new Date(), 'yyyy-MM-dd'), // 默认为今天
   totalUsageTime: 0,
   mostUsedApps: [],
   syncStatus: {
@@ -114,6 +124,80 @@ export const fetchDailyUsageStats = createAsyncThunk(
   }
 );
 
+// 新增：获取小时统计
+export const fetchHourlyUsageStats = createAsyncThunk(
+  'stats/fetchHourlyUsageStats',
+  async (date: string, { rejectWithValue }) => {
+    try {
+      const stats = await appUsageService.getHourlyUsageStats(date);
+      return stats;
+    } catch (error) {
+      return rejectWithValue(
+        (error as Error).message || '获取每小时使用统计失败'
+      );
+    }
+  }
+);
+
+// 新增：获取当日排行应用
+export const fetchDailyTopApps = createAsyncThunk(
+  'stats/fetchDailyTopApps',
+  async (
+    { date, limit }: { date: string; limit?: number },
+    { rejectWithValue }
+  ) => {
+    try {
+      const stats = await appUsageService.getDailyTopApps(date, limit);
+      return stats;
+    } catch (error) {
+      return rejectWithValue(
+        (error as Error).message || '获取当日应用排行失败'
+      );
+    }
+  }
+);
+
+// 新增：为Web生成模拟数据
+export const generateMockData = createAsyncThunk(
+  'stats/generateMockData',
+  async (date: string, { rejectWithValue }) => {
+    try {
+      const success = await appUsageService.generateMockDataForWeb(date);
+      return { success, date };
+    } catch (error) {
+      return rejectWithValue((error as Error).message || '生成模拟数据失败');
+    }
+  }
+);
+
+// 新增：生成过去N天的模拟数据
+export const generatePastDaysMockData = createAsyncThunk(
+  'stats/generatePastDaysMockData',
+  async (days: number = 30, { rejectWithValue }) => {
+    try {
+      const success = await appUsageService.generatePastDaysMockData(days);
+      return { success, days };
+    } catch (error) {
+      return rejectWithValue(
+        (error as Error).message || '生成过去天数数据失败'
+      );
+    }
+  }
+);
+
+// 新增：一键初始化模拟数据
+export const initMockData = createAsyncThunk(
+  'stats/initMockData',
+  async (_, { rejectWithValue }) => {
+    try {
+      const success = await appUsageService.initMockData();
+      return { success };
+    } catch (error) {
+      return rejectWithValue((error as Error).message || '初始化模拟数据失败');
+    }
+  }
+);
+
 // 创建 Redux Slice
 export const statsSlice = createSlice({
   name: 'stats',
@@ -125,9 +209,14 @@ export const statsSlice = createSlice({
     ) => {
       state.selectedDateRange = action.payload;
     },
+    setSelectedDate: (state, action: PayloadAction<string>) => {
+      state.selectedDate = action.payload;
+    },
     resetStats: (state) => {
       state.appUsageStats = [];
       state.dailyStats = [];
+      state.hourlyStats = [];
+      state.dailyTopApps = [];
       state.totalUsageTime = 0;
       state.error = null;
     },
@@ -192,11 +281,85 @@ export const statsSlice = createSlice({
       state.loading = false;
       state.error = action.payload as string;
     });
+
+    // 获取每小时使用统计
+    builder.addCase(fetchHourlyUsageStats.pending, (state) => {
+      state.loading = true;
+      state.error = null;
+    });
+    builder.addCase(fetchHourlyUsageStats.fulfilled, (state, action) => {
+      state.loading = false;
+      state.hourlyStats = action.payload;
+    });
+    builder.addCase(fetchHourlyUsageStats.rejected, (state, action) => {
+      state.loading = false;
+      state.error = action.payload as string;
+    });
+
+    // 获取当日应用排行
+    builder.addCase(fetchDailyTopApps.pending, (state) => {
+      state.loading = true;
+      state.error = null;
+    });
+    builder.addCase(fetchDailyTopApps.fulfilled, (state, action) => {
+      state.loading = false;
+      state.dailyTopApps = action.payload;
+    });
+    builder.addCase(fetchDailyTopApps.rejected, (state, action) => {
+      state.loading = false;
+      state.error = action.payload as string;
+    });
+
+    // 生成模拟数据
+    builder.addCase(generateMockData.pending, (state) => {
+      state.loading = true;
+      state.error = null;
+    });
+    builder.addCase(generateMockData.fulfilled, (state, action) => {
+      state.loading = false;
+      if (action.payload.success) {
+        state.error = null;
+      }
+    });
+    builder.addCase(generateMockData.rejected, (state, action) => {
+      state.loading = false;
+      state.error = action.payload as string;
+    });
+
+    // 生成过去N天模拟数据
+    builder.addCase(generatePastDaysMockData.pending, (state) => {
+      state.loading = true;
+    });
+    builder.addCase(generatePastDaysMockData.fulfilled, (state, action) => {
+      state.loading = false;
+      if (action.payload.success) {
+        state.error = null;
+      }
+    });
+    builder.addCase(generatePastDaysMockData.rejected, (state, action) => {
+      state.loading = false;
+      state.error = action.payload as string;
+    });
+
+    // 初始化模拟数据
+    builder.addCase(initMockData.pending, (state) => {
+      state.loading = true;
+    });
+    builder.addCase(initMockData.fulfilled, (state, action) => {
+      state.loading = false;
+      if (action.payload.success) {
+        state.error = null;
+      }
+    });
+    builder.addCase(initMockData.rejected, (state, action) => {
+      state.loading = false;
+      state.error = action.payload as string;
+    });
   },
 });
 
 // 导出 action creators
-export const { setDateRange, resetStats } = statsSlice.actions;
+export const { setDateRange, setSelectedDate, resetStats } = statsSlice.actions;
 
 // 导出 reducer
 export default statsSlice.reducer;

@@ -43,3 +43,4 @@ capacitor.config.ts
 
 # TypeScript
 *.tsbuildinfo 
+/generated/prisma

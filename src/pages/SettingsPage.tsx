@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { useSelector } from 'react-redux';
-import { RootState } from '../store';
+// import { useSelector } from 'react-redux';
+// import { RootState } from '../store';
+import { Link } from 'react-router-dom';
+import { Capacitor } from '@capacitor/core';
 
 const SettingsPage: React.FC = () => {
   const [aiModel, setAiModel] = useState<'openai' | 'local'>('openai');
@@ -8,6 +10,7 @@ const SettingsPage: React.FC = () => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
   const [autoSync, setAutoSync] = useState(true);
+  const isWebPlatform = !Capacitor.isNativePlatform();
 
   const handleSaveSettings = () => {
     // 实现保存设置的逻辑
@@ -121,6 +124,20 @@ const SettingsPage: React.FC = () => {
               清除所有数据
             </button>
           </div>
+
+          {isWebPlatform && (
+            <div className="border-t pt-3">
+              <Link
+                to="/mock-data"
+                className="flex items-center justify-between text-blue-600 hover:text-blue-800"
+              >
+                <span>模拟数据管理</span>
+                <span className="text-sm bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                  Web 开发
+                </span>
+              </Link>
+            </div>
+          )}
         </div>
 
         <button

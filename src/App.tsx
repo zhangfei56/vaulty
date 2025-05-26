@@ -1,42 +1,40 @@
-import { useEffect, useState } from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Provider } from 'react-redux';
 import { store } from './store';
-import AppRouter from './router';
+import Header from './components/common/Header';
+import Footer from './components/common/Footer';
+import Home from './pages/Home';
+import DiaryPage from './pages/DiaryPage';
+import TodoPage from './pages/TodoPage';
+import CalendarPage from './pages/CalendarPage';
+import StatsPage from './pages/StatsPage';
+import SettingsPage from './pages/SettingsPage';
+import MockDataPage from './pages/MockDataPage';
+import './test-typeorm'; // 导入TypeORM测试
 
-const App = () => {
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    // 初始化应用数据和资源
-    const initializeApp = async () => {
-      try {
-        // 这里可以添加应用初始化逻辑，如数据库连接等
-        console.log('App initialized successfully');
-      } catch (error) {
-        console.error('Failed to initialize app:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    initializeApp();
-  }, []);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        Loading...
-      </div>
-    );
-  }
-
+function App() {
   return (
     <Provider store={store}>
-      <div className="min-h-screen bg-gray-100 text-gray-900">
-        <AppRouter />
-      </div>
+      <Router>
+        <div className="App flex flex-col min-h-screen bg-gray-100">
+          <Header />
+          <main className="flex-1 pb-20">
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/diary" element={<DiaryPage />} />
+              <Route path="/diary/:id" element={<DiaryPage />} />
+              <Route path="/todo" element={<TodoPage />} />
+              <Route path="/calendar" element={<CalendarPage />} />
+              <Route path="/stats" element={<StatsPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/mock-data" element={<MockDataPage />} />
+            </Routes>
+          </main>
+          <Footer />
+        </div>
+      </Router>
     </Provider>
   );
-};
+}
 
 export default App;

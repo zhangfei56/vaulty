@@ -4,8 +4,8 @@ export interface Todo {
   description?: string;
   completed: boolean;
   dueDate?: string;
-  priority?: 'low' | 'medium' | 'high';
-  isRecurring: boolean;
+  priority?: 'high' | 'medium' | 'low';
+  isRecurring?: boolean;
   recurringPattern?: {
     type: 'daily' | 'weekly' | 'monthly';
     interval: number; // 每隔多少天/周/月
@@ -15,4 +15,5 @@ export interface Todo {
   createdAt: string;
   updatedAt: string;
   tags?: string[];
+  icon?: string;
 }

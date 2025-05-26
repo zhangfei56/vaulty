@@ -127,11 +127,18 @@ const TodoItem: React.FC<Props> = ({ todo }) => {
             </svg>
           )}
         </div>
-        <div className="ml-3 flex-1">
+        <div className="flex-1 ml-3">
           <div className="flex justify-between">
             <h3
-              className={`text-lg font-medium ${todo.completed ? 'line-through text-gray-500' : isOverdue ? 'text-red-700' : 'text-gray-900'}`}
+              className={`text-lg font-medium flex items-center ${
+                todo.completed
+                  ? 'line-through text-gray-500'
+                  : isOverdue
+                    ? 'text-red-700'
+                    : 'text-gray-900'
+              }`}
             >
+              <span className="mr-2 text-xl">{todo.icon || '📝'}</span>
               {todo.title}
             </h3>
             <div className="flex space-x-2">

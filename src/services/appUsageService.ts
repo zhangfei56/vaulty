@@ -4,8 +4,13 @@ import {
   AppUsageEvent,
   AppUsagePlugin,
 } from '../types/app-usage.capacitor';
-import { AppUsageStat, DailyUsageStat } from '../types/appUsage';
+import {
+  AppUsageStat,
+  DailyUsageStat,
+  HourlyUsageStat,
+} from '../types/appUsage';
 import { AppUsageRepository } from './data-source/AppUsageRepository';
+import { mockDataService } from './mockDataService';
 
 // 注册 Capacitor 插件
 const AppUsage = registerPlugin<AppUsagePlugin>('AppUsage');
@@ -136,7 +141,12 @@ class AppUsageService {
 
       return appInfo;
     } catch (error) {
-      console.error(`Failed to get info for app ${packageName}:`, error);
+      // 如果找不到应用，记录警告但不抛出错误
+      console.warn(`无法获取应用信息: ${packageName}`, error);
+
+      // 缓存null结果，避免重复查询
+      this.appInfoCache.set(packageName, null as any);
+
       return null;
     }
   }
@@ -233,12 +243,21 @@ class AppUsageService {
     // 填充应用名称和图标
     await Promise.all(
       sessions.map(async (session) => {
-        const appInfo = await this.getAppInfo(session.packageName);
-        if (appInfo) {
-          session.appName = appInfo.appName;
-          session.icon = appInfo.icon;
-        } else {
-          session.appName = session.packageName;
+        try {
+          const appInfo = await this.getAppInfo(session.packageName);
+          if (appInfo) {
+            session.appName = appInfo.appName;
+            session.icon = appInfo.icon;
+          } else {
+            // 如果找不到应用信息，使用包名作为应用名
+            session.appName = this.getDisplayNameFromPackage(
+              session.packageName
+            );
+          }
+        } catch (error) {
+          // 如果获取应用信息失败，使用包名作为应用名
+          console.warn(`无法获取应用信息: ${session.packageName}`, error);
+          session.appName = this.getDisplayNameFromPackage(session.packageName);
         }
       })
     );
@@ -292,6 +311,43 @@ class AppUsageService {
   }
 
   /**
+   * 从包名生成显示名称
+   */
+  private getDisplayNameFromPackage(packageName: string): string {
+    // 移除常见的包名前缀
+    let displayName = packageName
+      .replace(/^com\./, '')
+      .replace(/^android\./, '')
+      .replace(/^org\./, '');
+
+    // 将点号替换为空格，并将每个单词首字母大写
+    displayName = displayName
+      .split('.')
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+
+    // 处理一些特殊情况
+    const specialCases: { [key: string]: string } = {
+      'google.android.apps.nexuslauncher': 'Nexus Launcher',
+      'google.android.gm': 'Gmail',
+      'google.android.youtube': 'YouTube',
+      'google.android.apps.maps': 'Google Maps',
+      whatsapp: 'WhatsApp',
+      'instagram.android': 'Instagram',
+      'facebook.katana': 'Facebook',
+      'twitter.android': 'Twitter',
+    };
+
+    for (const [key, value] of Object.entries(specialCases)) {
+      if (packageName.includes(key)) {
+        return value;
+      }
+    }
+
+    return displayName || packageName;
+  }
+
+  /**
    * 同步应用使用数据
    * 从系统获取应用使用数据并保存到数据库
    */
@@ -307,6 +363,7 @@ class AppUsageService {
 
       // 查询系统应用使用数据
       const report = await this.getUsageReport(lastSync, now);
+      console.log('report', report);
 
       if (!report || !report.sessions.length) {
         console.log('没有新的使用数据需要同步');
@@ -368,6 +425,89 @@ class AppUsageService {
     endDate: string
   ): Promise<DailyUsageStat[]> {
     return await this.repository.getDailyUsageStats(startDate, endDate);
+  }
+
+  /**
+   * 获取指定日期的每小时使用统计
+   * @param date 日期 (YYYY-MM-DD)
+   */
+  async getHourlyUsageStats(date: string): Promise<HourlyUsageStat[]> {
+    try {
+      return await this.repository.getHourlyUsageStats(date);
+    } catch (error) {
+      console.error('获取每小时使用统计失败:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 获取指定日期使用时间最长的应用
+   * @param date 日期 (YYYY-MM-DD)
+   * @param limit 返回的应用数量限制
+   */
+  async getDailyTopApps(
+    date: string,
+    limit: number = 10
+  ): Promise<AppUsageStat[]> {
+    try {
+      return await this.repository.getDailyTopApps(date, limit);
+    } catch (error) {
+      console.error(`获取日期 ${date} 最常用的 ${limit} 个应用失败:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * 为Web环境生成模拟数据
+   * @param date 要生成数据的日期 (YYYY-MM-DD)
+   */
+  async generateMockDataForWeb(date: string): Promise<boolean> {
+    // 只在Web环境下使用模拟数据
+    if (Capacitor.isNativePlatform()) {
+      return false;
+    }
+
+    try {
+      return await mockDataService.generateDailyMockData(date);
+    } catch (error) {
+      console.error('生成模拟数据失败:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 为Web环境生成过去N天的模拟数据
+   * @param days 过去的天数
+   */
+  async generatePastDaysMockData(days: number = 30): Promise<boolean> {
+    // 只在Web环境下使用模拟数据
+    if (Capacitor.isNativePlatform()) {
+      return false;
+    }
+
+    try {
+      return await mockDataService.generatePastDaysMockData(days);
+    } catch (error) {
+      console.error(`生成过去${days}天的模拟数据失败:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * 一键初始化模拟数据
+   */
+  async initMockData(): Promise<boolean> {
+    // 只在Web环境下使用模拟数据
+    if (Capacitor.isNativePlatform()) {
+      return false;
+    }
+
+    try {
+      return await mockDataService.initializeMockData();
+    } catch (error) {
+      console.error('初始化模拟数据失败:', error);
+      return false;
+    }
   }
 }
 
