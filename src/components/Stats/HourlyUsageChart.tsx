@@ -75,19 +75,39 @@ const HourlyUsageChart: React.FC<Props> = ({ hourlyStats }) => {
         },
         options: {
           responsive: true,
+          maintainAspectRatio: false,
           scales: {
             y: {
               beginAtZero: true,
               title: {
                 display: true,
                 text: '使用时长 (分钟)',
+                font: {
+                  size: 12
+                }
               },
+              ticks: {
+                font: {
+                  size: 10
+                }
+              }
             },
             x: {
               title: {
                 display: true,
                 text: '时间',
+                font: {
+                  size: 12
+                }
               },
+              ticks: {
+                font: {
+                  size: 9
+                },
+                maxRotation: 45,
+                minRotation: 45,
+                maxTicksLimit: 12 // 移动设备上只显示12个时间标签
+              }
             },
           },
           plugins: {
@@ -102,7 +122,13 @@ const HourlyUsageChart: React.FC<Props> = ({ hourlyStats }) => {
             title: {
               display: true,
               text: '每小时使用时长',
+              font: {
+                size: 14
+              }
             },
+            legend: {
+              display: false // 移动设备上隐藏图例以节省空间
+            }
           },
         },
       });
@@ -141,31 +167,32 @@ const HourlyUsageChart: React.FC<Props> = ({ hourlyStats }) => {
   );
 
   return (
-    <div className="bg-white rounded-lg p-4 shadow-sm">
-      <h3 className="text-lg font-semibold mb-4">每小时使用情况</h3>
+    <div className="stats-card">
+      <h3 className="text-lg font-semibold mb-3">每小时使用情况</h3>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+      {/* 移动设备上使用单列布局 */}
+      <div className="grid grid-cols-1 gap-3 mb-3">
         <div className="bg-orange-50 p-3 rounded-md">
-          <p className="text-sm text-gray-600">总使用时长</p>
-          <p className="text-xl font-bold text-orange-600">
+          <p className="text-xs text-gray-600">总使用时长</p>
+          <p className="text-lg font-bold text-orange-600">
             {formatTime(totalDuration)}
           </p>
         </div>
         <div className="bg-orange-50 p-3 rounded-md">
-          <p className="text-sm text-gray-600">最活跃时段</p>
-          <p className="text-xl font-bold text-orange-600">
+          <p className="text-xs text-gray-600">最活跃时段</p>
+          <p className="text-lg font-bold text-orange-600">
             {getActivePeriod()}
           </p>
         </div>
         <div className="bg-orange-50 p-3 rounded-md">
-          <p className="text-sm text-gray-600">最高单小时使用</p>
-          <p className="text-xl font-bold text-orange-600">
+          <p className="text-xs text-gray-600">最高单小时使用</p>
+          <p className="text-lg font-bold text-orange-600">
             {formatTime(Math.max(...hourlyStats.map((h) => h.totalDuration)))}
           </p>
         </div>
       </div>
 
-      <div className="w-full h-64">
+      <div className="chart-container">
         <canvas ref={chartRef}></canvas>
       </div>
     </div>

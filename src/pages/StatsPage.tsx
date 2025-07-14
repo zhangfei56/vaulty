@@ -17,6 +17,8 @@ import UsageStatsChart from '../components/Stats/UsageStatsChart';
 import HourlyUsageChart from '../components/Stats/HourlyUsageChart';
 import TopAppsList from '../components/Stats/TopAppsList';
 import { Capacitor } from '@capacitor/core';
+import { SimpleWebDatabase } from '../services/data-source/SimpleWebDatabase';
+import '../components/Stats/StatsMobile.css';
 
 const StatsPage: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -24,6 +26,7 @@ const StatsPage: React.FC = () => {
   const [isGeneratingData, setIsGeneratingData] = useState(false);
   const [isSyncingData, setIsSyncingData] = useState(false);
   const [isCheckingPermission, setIsCheckingPermission] = useState(false);
+  const [isInitializingDb, setIsInitializingDb] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const {
     appUsageStats,
@@ -32,15 +35,40 @@ const StatsPage: React.FC = () => {
     loading,
     error,
     selectedDate,
-    // selectedDateRange,
     hasPermission,
   } = useSelector((state: RootState) => state.stats);
+
+  // 初始化Web数据库
+  useEffect(() => {
+    const initializeWebDatabase = async () => {
+      if (!Capacitor.isNativePlatform()) {
+        setIsInitializingDb(true);
+        try {
+          const webDb = SimpleWebDatabase.getInstance();
+          await webDb.initialize();
+          console.log('Web数据库初始化成功');
+        } catch (err) {
+          console.error('Web数据库初始化失败:', err);
+        } finally {
+          setIsInitializingDb(false);
+        }
+      }
+    };
+
+    initializeWebDatabase();
+  }, []);
 
   // 当日期改变时，更新数据
   useEffect(() => {
     const loadData = async () => {
       if (!Capacitor.isNativePlatform()) {
         // Web环境: 生成模拟数据
+        const webDb = SimpleWebDatabase.getInstance();
+        if (!webDb.isReady()) {
+          console.log('Web数据库未就绪，等待初始化...');
+          return;
+        }
+
         setIsGeneratingData(true);
         try {
           await dispatch(generateMockData(selectedDate)).unwrap();
@@ -55,8 +83,7 @@ const StatsPage: React.FC = () => {
         setIsCheckingPermission(true);
         try {
           console.log('检查使用统计权限...');
-          const hasPermissionResult =
-            await dispatch(checkPermission()).unwrap();
+          const hasPermissionResult = await dispatch(checkPermission()).unwrap();
 
           if (!hasPermissionResult) {
             console.log('没有权限，尝试请求权限...');
@@ -71,7 +98,7 @@ const StatsPage: React.FC = () => {
         } catch (err) {
           console.error('权限检查失败:', err);
           setIsCheckingPermission(false);
-          return; // 权限失败时不继续同步数据
+          return;
         } finally {
           setIsCheckingPermission(false);
         }
@@ -79,7 +106,7 @@ const StatsPage: React.FC = () => {
         // 权限检查通过后，开始同步数据
         setIsSyncingData(true);
         try {
-          console.log('开始同步原生使用数据...');
+          console.log('开始同步原生使用数据（包含应用名称和图标）...');
           await dispatch(syncAppUsageData()).unwrap();
           console.log('原生数据同步完成');
         } catch (err) {
@@ -99,7 +126,7 @@ const StatsPage: React.FC = () => {
     // 添加短暂延迟确保数据库准备就绪
     const timer = setTimeout(() => {
       loadData();
-    }, 300);
+    }, 500);
 
     return () => clearTimeout(timer);
   }, [dispatch, selectedDate, retryCount]);
@@ -111,7 +138,8 @@ const StatsPage: React.FC = () => {
 
     switch (timeRange) {
       case 'day':
-        startDate = endDate;
+        startDate = selectedDate; // 使用选中的日期
+        endDate = selectedDate;
         break;
       case 'week':
         const weekAgo = new Date();
@@ -127,11 +155,21 @@ const StatsPage: React.FC = () => {
 
     dispatch(setDateRange({ startDate, endDate }));
     dispatch(fetchAppUsageStats({ startDate, endDate }));
-  }, [dispatch, timeRange]);
+  }, [dispatch, timeRange, selectedDate]);
 
   // 处理日期选择
   const handleDateChange = (date: string) => {
     dispatch(setSelectedDate(date));
+  };
+
+  // 处理时间范围切换
+  const handleTimeRangeChange = (range: 'day' | 'week' | 'month') => {
+    setTimeRange(range);
+    // 如果切换到天视图，确保使用当前选中的日期
+    if (range === 'day') {
+      // 触发数据重新加载
+      setRetryCount(prev => prev + 1);
+    }
   };
 
   // 数据加载失败时重试
@@ -163,63 +201,79 @@ const StatsPage: React.FC = () => {
   }
 
   return (
-    <div className="py-4">
-      <h1 className="text-2xl font-bold mb-6">使用统计</h1>
+    <div className="py-2 px-2">
+      <h1 className="text-xl font-bold mb-4 px-2">使用统计</h1>
 
       {/* 时间范围选择 */}
-      <div className="mb-6">
-        <div className="flex justify-center space-x-4 bg-white rounded-lg p-2 shadow-sm">
+      <div className="mb-4 px-2">
+        <div className="time-range-selector">
           <button
-            onClick={() => setTimeRange('day')}
-            className={`px-4 py-2 rounded-md ${
-              timeRange === 'day'
-                ? 'bg-orange-100 text-orange-600'
-                : 'text-gray-600 hover:bg-gray-100'
-            }`}
+            onClick={() => handleTimeRangeChange('day')}
+            className={`time-range-button ${timeRange === 'day' ? 'active' : ''}`}
           >
-            今日
+            按天
           </button>
           <button
-            onClick={() => setTimeRange('week')}
-            className={`px-4 py-2 rounded-md ${
-              timeRange === 'week'
-                ? 'bg-orange-100 text-orange-600'
-                : 'text-gray-600 hover:bg-gray-100'
-            }`}
+            onClick={() => handleTimeRangeChange('week')}
+            className={`time-range-button ${timeRange === 'week' ? 'active' : ''}`}
           >
             本周
           </button>
           <button
-            onClick={() => setTimeRange('month')}
-            className={`px-4 py-2 rounded-md ${
-              timeRange === 'month'
-                ? 'bg-orange-100 text-orange-600'
-                : 'text-gray-600 hover:bg-gray-100'
-            }`}
+            onClick={() => handleTimeRangeChange('month')}
+            className={`time-range-button ${timeRange === 'month' ? 'active' : ''}`}
           >
             本月
           </button>
         </div>
       </div>
 
+      {/* 日期选择器 - 在"按天"视图下显示在时间范围选择器下方 */}
+      {timeRange === 'day' && (
+        <div className="mb-4 mx-2">
+          <div className="stats-card">
+            <div className="flex items-center justify-center">
+              <label htmlFor="date-select" className="mr-2 text-gray-600 text-sm">
+                选择日期:
+              </label>
+              <input
+                id="date-select"
+                type="date"
+                value={selectedDate}
+                max={today}
+                onChange={(e) => handleDateChange(e.target.value)}
+                className="border border-gray-300 rounded-md px-2 py-1 text-sm"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Web环境数据生成提示 */}
       {!Capacitor.isNativePlatform() && isGeneratingData && (
-        <div className="bg-blue-50 p-3 rounded-lg mb-4 text-center">
-          <p className="text-blue-700">正在为Web环境生成模拟数据...</p>
+        <div className="stats-card mx-2 text-center">
+          <p className="text-blue-700 text-sm">正在为Web环境生成模拟数据...</p>
+        </div>
+      )}
+
+      {/* Web环境数据库初始化提示 */}
+      {!Capacitor.isNativePlatform() && isInitializingDb && (
+        <div className="stats-card mx-2 text-center">
+          <p className="text-purple-700 text-sm">正在初始化Web数据库...</p>
         </div>
       )}
 
       {/* 原生环境权限检查提示 */}
       {Capacitor.isNativePlatform() && isCheckingPermission && (
-        <div className="bg-yellow-50 p-3 rounded-lg mb-4 text-center">
-          <p className="text-yellow-700">正在检查使用统计权限...</p>
+        <div className="stats-card mx-2 text-center">
+          <p className="text-yellow-700 text-sm">正在检查使用统计权限...</p>
         </div>
       )}
 
       {/* 原生环境数据同步提示 */}
       {Capacitor.isNativePlatform() && isSyncingData && (
-        <div className="bg-green-50 p-3 rounded-lg mb-4 text-center">
-          <p className="text-green-700">正在同步应用使用数据...</p>
+        <div className="stats-card mx-2 text-center">
+          <p className="text-green-700 text-sm">正在同步应用使用数据（包含图标）...</p>
         </div>
       )}
 
@@ -227,23 +281,18 @@ const StatsPage: React.FC = () => {
       {Capacitor.isNativePlatform() &&
         hasPermission === false &&
         !isCheckingPermission && (
-          <div className="bg-red-50 p-4 rounded-lg mb-4">
-            <h3 className="text-red-800 font-semibold mb-2">
-              需要使用统计权限
-            </h3>
-            <p className="text-red-700 text-sm mb-3">
+          <div className="permission-notice">
+            <h3>需要使用统计权限</h3>
+            <p>
               为了显示应用使用统计，需要您授予"使用情况访问权限"。请按以下步骤操作：
             </p>
-            <ol className="text-red-700 text-sm list-decimal list-inside space-y-1 mb-3">
+            <ol>
               <li>点击下方"授予权限"按钮</li>
               <li>在设置页面中找到本应用</li>
               <li>开启"允许使用情况访问"开关</li>
               <li>返回应用重试</li>
             </ol>
-            <button
-              onClick={handleRetry}
-              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm"
-            >
+            <button onClick={handleRetry}>
               授予权限
             </button>
           </div>
@@ -251,30 +300,31 @@ const StatsPage: React.FC = () => {
 
       {/* 整体使用统计 */}
       {loading ? (
-        <div className="flex justify-center py-12">
+        <div className="loading-container">
           <p>加载中...</p>
         </div>
       ) : appUsageStats.length > 0 ? (
-        <div className="bg-white rounded-lg shadow p-4 mb-6">
+        <div className="mb-4 mx-2">
           <UsageStatsChart
             data={appUsageStats.map((app) => ({
               appName: app.appName,
               totalTimeMs: app.totalDuration,
               openCount: app.usageCount,
-              date: selectedDate,
+              date: timeRange === 'day' ? selectedDate : 'range',
+              icon: app.icon, // 传递从Android系统获取的真实图标
             }))}
             timeRange={timeRange}
           />
         </div>
       ) : (
-        <div className="bg-gray-50 rounded-lg p-8 text-center mb-6">
-          <p className="text-gray-500">
+        <div className="empty-state mx-2">
+          <p className="text-sm">
             暂无使用数据，继续使用应用后将在这里看到统计信息
           </p>
           {!Capacitor.isNativePlatform() && !isGeneratingData && (
             <button
               onClick={handleRetry}
-              className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md"
+              className="mt-3 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-md text-sm"
             >
               生成模拟数据并重试
             </button>
@@ -282,7 +332,7 @@ const StatsPage: React.FC = () => {
           {Capacitor.isNativePlatform() && !isSyncingData && (
             <button
               onClick={handleRetry}
-              className="mt-4 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md"
+              className="mt-3 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-md text-sm"
             >
               同步使用数据并重试
             </button>
@@ -290,34 +340,15 @@ const StatsPage: React.FC = () => {
         </div>
       )}
 
-      {/* 日期选择器 - 仅在"天"视图下显示 */}
-      {timeRange === 'day' && (
-        <div className="mb-6">
-          <div className="flex items-center justify-center bg-white rounded-lg p-3 shadow-sm">
-            <label htmlFor="date-select" className="mr-2 text-gray-600">
-              选择日期:
-            </label>
-            <input
-              id="date-select"
-              type="date"
-              value={selectedDate}
-              max={today}
-              onChange={(e) => handleDateChange(e.target.value)}
-              className="border border-gray-300 rounded-md px-3 py-1"
-            />
-          </div>
-        </div>
-      )}
-
-      {/* 每小时使用统计和应用排行 */}
+      {/* 每小时使用统计和应用排行 - 仅在"按天"视图下显示 */}
       {timeRange === 'day' && (
         <>
           {loading ? (
-            <div className="flex justify-center py-6">
+            <div className="loading-container">
               <p>加载中...</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <div className="stats-grid mx-2">
               {/* 每小时使用统计 */}
               <div>
                 <HourlyUsageChart hourlyStats={hourlyStats} />
@@ -336,17 +367,17 @@ const StatsPage: React.FC = () => {
       )}
 
       {/* 使用健康建议 */}
-      <div className="mt-8">
-        <h2 className="text-xl font-semibold mb-4">使用健康建议</h2>
-        <div className="bg-white rounded-lg shadow p-4">
-          <p className="text-gray-700">
+      <div className="mt-6 mx-2">
+        <h2 className="text-lg font-semibold mb-3">使用健康建议</h2>
+        <div className="stats-card">
+          <p className="text-gray-700 text-sm">
             根据您的使用模式，我们将在这里显示个性化的使用建议，帮助您培养更健康的数字习惯。
           </p>
 
           {hourlyStats.some((hour) => hour.hour >= 23 || hour.hour <= 5) && (
-            <div className="mt-4 bg-blue-50 p-4 rounded-lg">
-              <h4 className="font-medium text-blue-800">深夜使用提醒</h4>
-              <p className="text-blue-700 text-sm mt-1">
+            <div className="health-tip bg-blue-50">
+              <h4 className="health-tip-title text-blue-800">深夜使用提醒</h4>
+              <p className="health-tip-content text-blue-700">
                 数据显示您有深夜或凌晨使用手机的习惯，这可能会影响您的睡眠质量。建议在睡前1小时内避免使用电子设备。
               </p>
             </div>
@@ -354,11 +385,11 @@ const StatsPage: React.FC = () => {
 
           {dailyTopApps.length > 0 &&
             dailyTopApps[0].totalDuration > 7200000 && (
-              <div className="mt-4 bg-amber-50 p-4 rounded-lg">
-                <h4 className="font-medium text-amber-800">
+              <div className="health-tip bg-amber-50">
+                <h4 className="health-tip-title text-amber-800">
                   单应用使用时间过长
                 </h4>
-                <p className="text-amber-700 text-sm mt-1">
+                <p className="health-tip-content text-amber-700">
                   您在{dailyTopApps[0].appName}
                   上花费了大量时间。适当休息并分散使用时间可以减少眼睛疲劳。
                 </p>

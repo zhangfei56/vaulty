@@ -37,7 +37,7 @@ lerna-debug.log*
 *.sw?
 
 # Capacitor
-android
+# android
 ios
 capacitor.config.ts
 

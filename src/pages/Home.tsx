@@ -12,7 +12,7 @@ const Home = () => {
 
   return (
     <div className="p-4">
-      <h1 className="text-2xl font-bold mb-6">欢迎使用 Vaulty2</h1>
+      <h1 className="text-2xl font-bold mb-6">欢迎使用 Vaulty</h1>
 
       <div className="grid grid-cols-2 gap-4 mb-6">
         <Link

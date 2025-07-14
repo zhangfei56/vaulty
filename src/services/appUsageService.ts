@@ -6,11 +6,13 @@ import {
 } from '../types/app-usage.capacitor';
 import {
   AppUsageStat,
-  DailyUsageStat,
   HourlyUsageStat,
 } from '../types/appUsage';
 import { AppUsageRepository } from './data-source/AppUsageRepository';
-import { mockDataService } from './mockDataService';
+import { InstalledAppRepository } from './data-source/InstalledAppRepository';
+import { AppUsageRawEventRepository } from './data-source/AppUsageRawEventRepository';
+import { AppUsageHourlyStatsRepository } from './data-source/AppUsageHourlyStatsRepository';
+import { SimpleWebDatabase } from './data-source/SimpleWebDatabase';
 
 // 注册 Capacitor 插件
 const AppUsage = registerPlugin<AppUsagePlugin>('AppUsage');
@@ -49,9 +51,17 @@ class AppUsageService {
 
   // 数据仓库
   private repository: AppUsageRepository;
+  private webDatabase: SimpleWebDatabase;
+  private installedAppRepository: InstalledAppRepository;
+  private rawEventRepository: AppUsageRawEventRepository;
+  private hourlyStatsRepository: AppUsageHourlyStatsRepository;
 
   constructor() {
     this.repository = AppUsageRepository.getInstance();
+    this.webDatabase = SimpleWebDatabase.getInstance();
+    this.installedAppRepository = InstalledAppRepository.getInstance();
+    this.rawEventRepository = AppUsageRawEventRepository.getInstance();
+    this.hourlyStatsRepository = AppUsageHourlyStatsRepository.getInstance();
   }
 
   /**
@@ -123,10 +133,17 @@ class AppUsageService {
   /**
    * 获取指定应用的信息
    */
-  async getAppInfo(packageName: string): Promise<AppInfo | null> {
+  async getAppInfo(packageName: string, includeIcon: boolean = true): Promise<AppInfo | null> {
     // 检查缓存
     if (this.appInfoCache.has(packageName)) {
-      return this.appInfoCache.get(packageName)!;
+      const cachedInfo = this.appInfoCache.get(packageName)!;
+      // 如果需要图标但缓存中没有，重新获取
+      if (includeIcon && !cachedInfo.icon) {
+        // 清除缓存，重新获取
+        this.appInfoCache.delete(packageName);
+      } else {
+        return cachedInfo;
+      }
     }
 
     if (!this.isSupported()) {
@@ -198,107 +215,62 @@ class AppUsageService {
         if (startTime) {
           const duration = event.timestamp - startTime;
 
-          // 只添加持续时间大于500毫秒的会话（排除可能的噪音数据）
-          if (duration > 500) {
+          // 只记录有效的会话（持续时间大于0）
+          if (duration > 0) {
             sessions.push({
               packageName: event.packageName,
-              appName: '', // 后续填充
+              appName: this.getDisplayNameFromPackage(event.packageName),
               startTime,
               endTime: event.timestamp,
               duration,
             });
           }
 
+          // 清除开始时间
           appResumeEvents.delete(event.packageName);
         }
       }
     }
 
-    // 处理未配对的前台事件（可能是应用仍在前台）
-    const now = Date.now();
-    appResumeEvents.forEach((startTime, packageName) => {
-      const duration = now - startTime;
-      if (duration > 500) {
-        sessions.push({
-          packageName,
-          appName: '',
-          startTime,
-          endTime: now,
-          duration,
-        });
-      }
-    });
-
     return sessions;
   }
 
   /**
-   * 生成应用使用报告
+   * 生成使用报告
    */
   private async generateReport(
     sessions: AppUsageSession[],
     startTime: number,
     endTime: number
   ): Promise<AppUsageReport> {
-    // 填充应用名称和图标
-    await Promise.all(
-      sessions.map(async (session) => {
-        try {
-          const appInfo = await this.getAppInfo(session.packageName);
-          if (appInfo) {
-            session.appName = appInfo.appName;
-            session.icon = appInfo.icon;
-          } else {
-            // 如果找不到应用信息，使用包名作为应用名
-            session.appName = this.getDisplayNameFromPackage(
-              session.packageName
-            );
-          }
-        } catch (error) {
-          // 如果获取应用信息失败，使用包名作为应用名
-          console.warn(`无法获取应用信息: ${session.packageName}`, error);
-          session.appName = this.getDisplayNameFromPackage(session.packageName);
-        }
-      })
+    const totalUsageTime = sessions.reduce(
+      (total, session) => total + session.duration,
+      0
     );
 
-    // 计算每个应用的总使用时间和启动次数
-    const appSummaryMap = new Map<
-      string,
-      { totalTime: number; launchCount: number; appName: string; icon?: string }
-    >();
+    // 按应用分组统计
+    const appStats = new Map<string, { totalTime: number; launchCount: number }>();
 
     for (const session of sessions) {
-      const { packageName, appName, duration, icon } = session;
-
-      if (!appSummaryMap.has(packageName)) {
-        appSummaryMap.set(packageName, {
-          totalTime: 0,
-          launchCount: 0,
-          appName,
-          icon,
+      const existing = appStats.get(session.packageName);
+      if (existing) {
+        existing.totalTime += session.duration;
+        existing.launchCount += 1;
+      } else {
+        appStats.set(session.packageName, {
+          totalTime: session.duration,
+          launchCount: 1,
         });
       }
-
-      const summary = appSummaryMap.get(packageName)!;
-      summary.totalTime += duration;
-      summary.launchCount += 1;
     }
 
-    // 按使用时间排序
-    const appsSummary = Array.from(appSummaryMap.entries()).map(
-      ([packageName, summary]) => ({
+    const appsSummary = Array.from(appStats.entries()).map(
+      ([packageName, stats]) => ({
         packageName,
-        ...summary,
+        appName: this.getDisplayNameFromPackage(packageName),
+        totalTime: stats.totalTime,
+        launchCount: stats.launchCount,
       })
-    );
-
-    appsSummary.sort((a, b) => b.totalTime - a.totalTime);
-
-    // 计算总的使用时间
-    const totalUsageTime = appsSummary.reduce(
-      (sum, app) => sum + app.totalTime,
-      0
     );
 
     return {
@@ -311,7 +283,7 @@ class AppUsageService {
   }
 
   /**
-   * 从包名生成显示名称
+   * 从包名获取显示名称
    */
   private getDisplayNameFromPackage(packageName: string): string {
     // 移除常见的包名前缀
@@ -357,48 +329,110 @@ class AppUsageService {
     }
 
     try {
-      // 获取上次同步时间
-      const lastSync = await this.repository.getLastSyncTime();
+      console.log('开始同步应用使用数据...');
       const now = Date.now();
 
-      // 查询系统应用使用数据
-      const report = await this.getUsageReport(lastSync, now);
-      console.log('report', report);
+      // 第一步：同步已安装应用信息到数据库（包含本地化名称和图标）
+      console.log('正在同步已安装应用信息到数据库...');
+      const installedApps = await this.getInstalledApps(true); // 包含图标
+      console.log(`成功获取 ${installedApps.length} 个已安装应用信息`);
 
-      if (!report || !report.sessions.length) {
-        console.log('没有新的使用数据需要同步');
+      // 将已安装应用信息保存到数据库
+      const syncAppsResult = await this.installedAppRepository.syncInstalledApps(installedApps, now);
+      if (!syncAppsResult) {
+        throw new Error('同步已安装应用信息到数据库失败');
+      }
+
+      // 更新内存缓存
+      const appInfoMap = new Map<string, AppInfo>();
+      installedApps.forEach(app => {
+        this.appInfoCache.set(app.packageName, app);
+        appInfoMap.set(app.packageName, app);
+      });
+
+      // 第二步：获取原始事件数据
+      const lastSync = await this.repository.getLastSyncTime();
+      console.log(`查询原始事件数据: ${new Date(lastSync).toLocaleString()} - ${new Date(now).toLocaleString()}`);
+      
+      const { events } = await AppUsage.queryEvents({ startTime: lastSync, endTime: now });
+      
+      if (!events || events.length === 0) {
+        console.log('没有新的原始事件数据需要同步');
+        // 即使没有新的事件数据，也更新同步时间
+        await this.repository.saveLastSyncTime(now);
         return true;
       }
 
-      // 将会话数据转换为数据库记录格式
-      const records = report.sessions.map((session) => {
+      console.log(`发现 ${events.length} 条原始事件数据`);
+
+      // 第三步：保存原始事件数据到数据库
+      const saveRawEventsResult = await this.rawEventRepository.saveRawEvents(events);
+      if (!saveRawEventsResult) {
+        throw new Error('保存原始事件数据失败');
+      }
+
+      // 第四步：处理原始事件数据，生成使用会话记录
+      const sessions = this.processEventsToSessions(events);
+      
+      if (sessions.length === 0) {
+        console.log('没有有效的使用会话数据');
+        await this.repository.saveLastSyncTime(now);
+        return true;
+      }
+
+      console.log(`生成 ${sessions.length} 条使用会话记录`);
+
+      // 第五步：将使用会话数据与数据库中的应用信息合并
+      const records = sessions.map((session) => {
         const date = new Date(session.startTime);
         const dateString = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
+        // 从内存缓存中获取应用信息（已从数据库同步）
+        const appInfo = appInfoMap.get(session.packageName);
+        const appName = appInfo?.appName || this.getDisplayNameFromPackage(session.packageName);
+        const appIcon = appInfo?.icon;
+
         return {
           packageName: session.packageName,
-          appName: session.appName,
+          appName: appName,
           startTime: session.startTime,
           endTime: session.endTime,
           duration: session.duration,
           date: dateString,
-          icon: session.icon,
+          icon: appIcon,
         };
       });
 
-      // 保存到仓库
+      // 第六步：保存使用记录到数据库
+      console.log(`正在保存 ${records.length} 条使用记录...`);
       const saveResult = await this.repository.saveAppUsageRecords(records);
 
       if (!saveResult) {
         throw new Error('保存应用使用记录失败');
       }
 
-      // 更新同步时间
+      // 第七步：聚合小时统计数据
+      const affectedDates = new Set(records.map(r => r.date));
+      console.log(`正在聚合 ${affectedDates.size} 个日期的小时统计数据...`);
+      
+      let aggregatedDates = 0;
+      for (const date of affectedDates) {
+        const aggregateResult = await this.hourlyStatsRepository.aggregateHourlyStats(date);
+        if (aggregateResult) {
+          aggregatedDates++;
+        }
+      }
+      
+      console.log(`✅ 成功聚合 ${aggregatedDates}/${affectedDates.size} 个日期的小时统计数据`);
+
+      // 第八步：更新同步时间
       await this.repository.saveLastSyncTime(now);
 
+      const uniqueApps = new Set(records.map(r => r.packageName)).size;
+      console.log(`✅ 同步完成: ${events.length} 条原始事件，${records.length} 条使用记录，涉及 ${uniqueApps} 个应用`);
       return true;
     } catch (error) {
-      console.error('同步应用使用数据失败:', error);
+      console.error('❌ 同步应用使用数据失败:', error);
       throw error;
     }
   }
@@ -412,19 +446,12 @@ class AppUsageService {
     startDate: string,
     endDate: string
   ): Promise<AppUsageStat[]> {
-    return await this.repository.getUsageStats(startDate, endDate);
-  }
-
-  /**
-   * 获取每日使用统计数据
-   * 按日期分组的使用统计
-   * 实现所需接口，直接委托给仓库
-   */
-  async getDailyUsageStats(
-    startDate: string,
-    endDate: string
-  ): Promise<DailyUsageStat[]> {
-    return await this.repository.getDailyUsageStats(startDate, endDate);
+    if (Capacitor.isNativePlatform()) {
+      return await this.repository.getUsageStats(startDate, endDate);
+    } else {
+      // Web环境使用简单数据库
+      return await this.webDatabase.getUsageStats(startDate, endDate);
+    }
   }
 
   /**
@@ -433,10 +460,44 @@ class AppUsageService {
    */
   async getHourlyUsageStats(date: string): Promise<HourlyUsageStat[]> {
     try {
-      return await this.repository.getHourlyUsageStats(date);
+      if (Capacitor.isNativePlatform()) {
+        // 原生环境：优先从聚合表查询，如果没有则从原始事件计算
+        console.log(`获取日期 ${date} 的每小时使用统计...`);
+        
+        // 1. 尝试从聚合表查询
+        const aggregatedStats = await this.hourlyStatsRepository.getHourlyUsageStats(date);
+        
+        // 检查是否有数据
+        const hasData = aggregatedStats.some(stat => stat.totalDuration > 0);
+        
+        if (hasData) {
+          console.log(`✅ 从聚合表获取日期 ${date} 的小时统计数据`);
+          return aggregatedStats;
+        }
+        
+        // 2. 如果聚合表没有数据，尝试从原始事件计算
+        console.log(`聚合表无数据，从原始事件计算日期 ${date} 的小时统计...`);
+        const rawStats = await this.rawEventRepository.getHourlyUsageStats(date);
+        
+        // 3. 如果原始事件有数据，则同时聚合保存到聚合表
+        const hasRawData = rawStats.some(stat => stat.totalDuration > 0);
+        if (hasRawData) {
+          console.log(`从原始事件计算出数据，同时聚合保存到聚合表...`);
+          await this.hourlyStatsRepository.aggregateHourlyStats(date);
+        }
+        
+        return rawStats;
+      } else {
+        // Web环境使用简单数据库
+        return await this.webDatabase.getHourlyUsageStats(date);
+      }
     } catch (error) {
       console.error('获取每小时使用统计失败:', error);
-      return [];
+      return Array.from({ length: 24 }, (_, hour) => ({
+        hour,
+        totalDuration: 0,
+        apps: [],
+      }));
     }
   }
 
@@ -450,7 +511,12 @@ class AppUsageService {
     limit: number = 10
   ): Promise<AppUsageStat[]> {
     try {
-      return await this.repository.getDailyTopApps(date, limit);
+      if (Capacitor.isNativePlatform()) {
+        return await this.repository.getDailyTopApps(date, limit);
+      } else {
+        // Web环境使用简单数据库
+        return await this.webDatabase.getDailyTopApps(date, limit);
+      }
     } catch (error) {
       console.error(`获取日期 ${date} 最常用的 ${limit} 个应用失败:`, error);
       return [];
@@ -468,7 +534,7 @@ class AppUsageService {
     }
 
     try {
-      return await mockDataService.generateDailyMockData(date);
+      return await this.webDatabase.generateDailyMockData(date);
     } catch (error) {
       console.error('生成模拟数据失败:', error);
       return false;
@@ -486,7 +552,7 @@ class AppUsageService {
     }
 
     try {
-      return await mockDataService.generatePastDaysMockData(days);
+      return await this.webDatabase.generatePastDaysMockData(days);
     } catch (error) {
       console.error(`生成过去${days}天的模拟数据失败:`, error);
       return false;
@@ -503,11 +569,153 @@ class AppUsageService {
     }
 
     try {
-      return await mockDataService.initializeMockData();
+      await this.webDatabase.initialize();
+      return true;
     } catch (error) {
       console.error('初始化模拟数据失败:', error);
       return false;
     }
+  }
+
+  /**
+   * 获取应用使用统计数据（与数据库中的应用信息关联）
+   * 使用INNER JOIN查询，确保只返回仍然安装的应用的统计数据
+   */
+  async getUsageStatsWithAppDetails(
+    startDate: string,
+    endDate: string
+  ): Promise<AppUsageStat[]> {
+    try {
+      if (Capacitor.isNativePlatform()) {
+        // 原生环境使用数据库关联查询
+        return await this.installedAppRepository.getUsageStatsWithAppDetails(startDate, endDate);
+      } else {
+        // Web环境使用简单数据库
+        return await this.webDatabase.getUsageStats(startDate, endDate);
+      }
+    } catch (error) {
+      console.error('获取应用使用统计和详情失败:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 获取已安装应用的统计信息
+   */
+  async getInstalledAppStats(): Promise<{
+    totalApps: number;
+    systemApps: number;
+    userApps: number;
+    deletedApps: number;
+  }> {
+    if (Capacitor.isNativePlatform()) {
+      return await this.installedAppRepository.getInstalledAppStats();
+    } else {
+      return {
+        totalApps: 0,
+        systemApps: 0,
+        userApps: 0,
+        deletedApps: 0
+      };
+    }
+  }
+
+  /**
+   * 获取所有有效的已安装应用
+   */
+  async getActiveInstalledApps() {
+    if (Capacitor.isNativePlatform()) {
+      return await this.installedAppRepository.getActiveInstalledApps();
+    } else {
+      return [];
+    }
+  }
+
+  /**
+   * 清理过期的已删除应用记录
+   */
+  async cleanupDeletedApps(daysOld: number = 30): Promise<number> {
+    if (Capacitor.isNativePlatform()) {
+      return await this.installedAppRepository.cleanupDeletedApps(daysOld);
+    } else {
+      return 0;
+    }
+  }
+
+  /**
+   * 清理过期的原始事件数据
+   */
+  async cleanupOldRawEvents(daysOld: number = 30): Promise<number> {
+    if (Capacitor.isNativePlatform()) {
+      const beforeDate = new Date();
+      beforeDate.setDate(beforeDate.getDate() - daysOld);
+      const beforeDateString = beforeDate.toISOString().split('T')[0];
+      return await this.rawEventRepository.cleanupOldEvents(beforeDateString);
+    } else {
+      return 0;
+    }
+  }
+
+  /**
+   * 清理过期的小时统计数据
+   */
+  async cleanupOldHourlyStats(daysOld: number = 90): Promise<number> {
+    if (Capacitor.isNativePlatform()) {
+      const beforeDate = new Date();
+      beforeDate.setDate(beforeDate.getDate() - daysOld);
+      const beforeDateString = beforeDate.toISOString().split('T')[0];
+      return await this.hourlyStatsRepository.cleanupOldHourlyStats(beforeDateString);
+    } else {
+      return 0;
+    }
+  }
+
+  /**
+   * 数据维护：清理过期数据并优化存储
+   * 建议定期执行（如每周执行一次）
+   */
+  async performDataMaintenance(): Promise<{
+    deletedRawEvents: number;
+    deletedHourlyStats: number;
+    deletedApps: number;
+    success: boolean;
+  }> {
+    const result = {
+      deletedRawEvents: 0,
+      deletedHourlyStats: 0,
+      deletedApps: 0,
+      success: false,
+    };
+
+    if (!Capacitor.isNativePlatform()) {
+      console.log('Web环境不需要数据维护');
+      result.success = true;
+      return result;
+    }
+
+    try {
+      console.log('开始执行数据维护...');
+
+      // 清理过期的原始事件数据（保留30天）
+      console.log('清理过期的原始事件数据...');
+      result.deletedRawEvents = await this.cleanupOldRawEvents(30);
+
+      // 清理过期的小时统计数据（保留90天）
+      console.log('清理过期的小时统计数据...');
+      result.deletedHourlyStats = await this.cleanupOldHourlyStats(90);
+
+      // 清理过期的已删除应用记录（保留30天）
+      console.log('清理过期的已删除应用记录...');
+      result.deletedApps = await this.cleanupDeletedApps(30);
+
+      result.success = true;
+      console.log(`✅ 数据维护完成: 清理了 ${result.deletedRawEvents} 条原始事件, ${result.deletedHourlyStats} 条小时统计, ${result.deletedApps} 条应用记录`);
+    } catch (error) {
+      console.error('❌ 数据维护失败:', error);
+      result.success = false;
+    }
+
+    return result;
   }
 }
 

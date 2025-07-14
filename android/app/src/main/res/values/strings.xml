@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">vaulty</string>
+    <string name="title_activity_main">vaulty</string>
+    <string name="package_name">com.nicky.vaulty</string>
+    <string name="custom_url_scheme">com.nicky.vaulty</string>
+</resources>

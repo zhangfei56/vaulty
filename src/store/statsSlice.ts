@@ -103,27 +103,6 @@ export const fetchAppUsageStats = createAsyncThunk(
   }
 );
 
-// 异步操作：获取每日使用统计
-export const fetchDailyUsageStats = createAsyncThunk(
-  'stats/fetchDailyUsageStats',
-  async (
-    dateRange: { startDate: string; endDate: string },
-    { rejectWithValue }
-  ) => {
-    try {
-      const stats = await appUsageService.getDailyUsageStats(
-        dateRange.startDate,
-        dateRange.endDate
-      );
-      return stats;
-    } catch (error) {
-      return rejectWithValue(
-        (error as Error).message || '获取每日使用统计失败'
-      );
-    }
-  }
-);
-
 // 新增：获取小时统计
 export const fetchHourlyUsageStats = createAsyncThunk(
   'stats/fetchHourlyUsageStats',
@@ -265,19 +244,6 @@ export const statsSlice = createSlice({
         .slice(0, 5);
     });
     builder.addCase(fetchAppUsageStats.rejected, (state, action) => {
-      state.loading = false;
-      state.error = action.payload as string;
-    });
-
-    // 获取每日使用统计
-    builder.addCase(fetchDailyUsageStats.pending, (state) => {
-      state.loading = true;
-    });
-    builder.addCase(fetchDailyUsageStats.fulfilled, (state, action) => {
-      state.loading = false;
-      state.dailyStats = action.payload;
-    });
-    builder.addCase(fetchDailyUsageStats.rejected, (state, action) => {
       state.loading = false;
       state.error = action.payload as string;
     });

@@ -1,5 +1,5 @@
 {
-  "name": "vaulty2",
+  "name": "vaulty",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -12,10 +12,14 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "capacitor:sync": "capacitor sync",
+    "capacitor:sync:android": "npm run build && capacitor sync android",
+    "capacitor:sync:ios": "npm run build && capacitor sync ios",
     "capacitor:add:android": "capacitor add android",
     "capacitor:add:ios": "capacitor add ios",
     "capacitor:open:android": "capacitor open android",
-    "capacitor:open:ios": "capacitor open ios"
+    "capacitor:open:ios": "capacitor open ios",
+    "android:build": "./scripts/sync-android.sh",
+    "android:test-persistence": "./scripts/test-android-persistence.sh"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^5.7.4",
@@ -56,6 +60,7 @@
     "@types/node": "^20.10.6",
     "@types/react": "^18.2.15",
     "@types/react-dom": "^18.2.7",
+    "@types/sql.js": "^1.4.9",
     "@typescript-eslint/eslint-plugin": "^6.16.0",
     "@typescript-eslint/parser": "^6.16.0",
     "@vitejs/plugin-react": "^4.2.1",

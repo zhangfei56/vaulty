@@ -1,0 +1,309 @@
+/* 移动设备统计页面优化样式 */
+
+/* 图表容器优化 */
+.chart-container {
+  position: relative;
+  height: 250px;
+  width: 100%;
+}
+
+/* 更大的图表容器 - 用于主要的应用使用统计图表 */
+.chart-container-large {
+  position: relative;
+  height: 350px;
+  width: 100%;
+}
+
+/* 移动设备上的图表标签优化 */
+@media (max-width: 480px) {
+  .chart-container {
+    height: 200px;
+  }
+  
+  .chart-container-large {
+    height: 280px;
+  }
+  
+  /* 隐藏不必要的图表元素 */
+  .chart-legend {
+    display: none !important;
+  }
+  
+  /* 优化图表标题 */
+  .chart-title {
+    font-size: 14px !important;
+    margin-bottom: 8px !important;
+  }
+  
+  /* 优化图表轴标签 */
+  .chart-axis-label {
+    font-size: 10px !important;
+  }
+  
+  /* 优化图表刻度 */
+  .chart-tick {
+    font-size: 9px !important;
+  }
+}
+
+/* 超小屏幕优化 */
+@media (max-width: 360px) {
+  .chart-container {
+    height: 180px;
+  }
+  
+  .chart-container-large {
+    height: 250px;
+  }
+  
+  /* 进一步减小字体 */
+  .chart-title {
+    font-size: 12px !important;
+  }
+  
+  .chart-axis-label {
+    font-size: 8px !important;
+  }
+  
+  .chart-tick {
+    font-size: 7px !important;
+  }
+}
+
+/* 应用列表项优化 */
+.app-list-item {
+  padding: 8px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.app-list-item:last-child {
+  border-bottom: none;
+}
+
+/* 移动设备上的应用图标优化 */
+.app-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+/* 应用名称截断 */
+.app-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 统计卡片优化 */
+.stats-card {
+  padding: 12px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* 时间范围选择器优化 */
+.time-range-selector {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: 12px;
+}
+
+.time-range-button {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  border: none;
+  background: transparent;
+  transition: all 0.2s;
+}
+
+.time-range-button.active {
+  background: #fed7aa;
+  color: #ea580c;
+}
+
+.time-range-button:not(.active) {
+  color: #6b7280;
+}
+
+.time-range-button:not(.active):hover {
+  background: #f3f4f6;
+}
+
+/* 加载状态优化 */
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 40px 20px;
+  color: #6b7280;
+}
+
+/* 空状态优化 */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #6b7280;
+}
+
+/* 健康建议优化 */
+.health-tip {
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.health-tip-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.health-tip-content {
+  line-height: 1.4;
+}
+
+/* 权限提示优化 */
+.permission-notice {
+  margin: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.permission-notice h3 {
+  color: #dc2626;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.permission-notice p {
+  color: #dc2626;
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+
+.permission-notice ol {
+  color: #dc2626;
+  font-size: 11px;
+  margin-bottom: 8px;
+  padding-left: 16px;
+}
+
+.permission-notice button {
+  background: #dc2626;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+/* 响应式网格优化 */
+.stats-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr;
+}
+
+/* 应用图标网格 */
+.app-icons-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.app-icon-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.app-icon-item img {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  object-fit: cover;
+  margin-bottom: 4px;
+}
+
+.app-icon-item .placeholder {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: bold;
+  color: #6b7280;
+}
+
+.app-icon-item .app-name {
+  font-size: 10px;
+  color: #6b7280;
+  max-width: 50px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-icon-item .usage-time {
+  font-size: 10px;
+  color: #ea580c;
+  font-weight: 600;
+}
+
+/* 平板设备优化 */
+@media (min-width: 768px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .chart-container {
+    height: 300px;
+  }
+  
+  .chart-container-large {
+    height: 400px;
+  }
+  
+  .app-icons-grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+
+/* 桌面设备优化 */
+@media (min-width: 1024px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+  
+  .chart-container {
+    height: 350px;
+  }
+  
+  .chart-container-large {
+    height: 450px;
+  }
+  
+  .app-icons-grid {
+    grid-template-columns: repeat(8, 1fr);
+  }
+} 

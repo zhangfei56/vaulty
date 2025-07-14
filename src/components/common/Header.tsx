@@ -9,7 +9,7 @@ const Header = () => {
   const getPageTitle = (path: string) => {
     switch (path) {
       case '/':
-        return 'Vaulty2';
+        return 'Vaulty';
       case '/diary':
         return '我的日记';
       case '/todo':
@@ -21,7 +21,7 @@ const Header = () => {
       case '/settings':
         return '设置';
       default:
-        return 'Vaulty2';
+        return 'Vaulty';
     }
   };
 

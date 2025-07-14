@@ -25,4 +25,8 @@ export default defineConfig({
       keep_fnames: true,
     },
   },
+  optimizeDeps: {
+    include: ['sql.js'],
+  },
+  assetsInclude: ['**/*.wasm'],
 });

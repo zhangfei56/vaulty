@@ -6,6 +6,7 @@ interface AppUsage {
   totalTimeMs: number;
   openCount: number;
   date: string;
+  icon?: string; // 添加图标字段
 }
 
 interface Props {
@@ -36,30 +37,36 @@ const UsageStatsChart: React.FC<Props> = ({ data, timeRange }) => {
   // 根据选择的时间范围过滤和分组数据
   const prepareData = () => {
     // 按应用名称汇总使用时长
-    const appUsageMap = new Map<string, number>();
-    const appOpenCountMap = new Map<string, number>();
+    const appUsageMap = new Map<string, { time: number; count: number; icon?: string }>();
 
     // 过滤当前时间范围的数据
     const filteredData = filterDataByTimeRange(data, timeRange);
 
     filteredData.forEach((item) => {
-      const prevTime = appUsageMap.get(item.appName) || 0;
-      appUsageMap.set(item.appName, prevTime + item.totalTimeMs);
-
-      const prevCount = appOpenCountMap.get(item.appName) || 0;
-      appOpenCountMap.set(item.appName, prevCount + item.openCount);
+      const existing = appUsageMap.get(item.appName);
+      if (existing) {
+        existing.time += item.totalTimeMs;
+        existing.count += item.openCount;
+      } else {
+        appUsageMap.set(item.appName, {
+          time: item.totalTimeMs,
+          count: item.openCount,
+          icon: item.icon
+        });
+      }
     });
 
     // 转换为图表数据格式
     const sortedApps = Array.from(appUsageMap.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10); // 只取前10个应用
+      .sort((a, b) => b[1].time - a[1].time)
+      .slice(0, 8); // 移动设备上只显示前8个应用
 
     const labels = sortedApps.map(([appName]) => appName);
-    const usageData = sortedApps.map(([, time]) => time / (1000 * 60)); // 转换为分钟
-    const openCountData = labels.map((app) => appOpenCountMap.get(app) || 0);
+    const usageData = sortedApps.map(([, data]) => data.time / (1000 * 60)); // 转换为分钟
+    const openCountData = sortedApps.map(([, data]) => data.count);
+    const appIcons = sortedApps.map(([, data]) => data.icon);
 
-    return { labels, usageData, openCountData };
+    return { labels, usageData, openCountData, appIcons };
   };
 
   const filterDataByTimeRange = (
@@ -126,20 +133,48 @@ const UsageStatsChart: React.FC<Props> = ({ data, timeRange }) => {
         },
         options: {
           responsive: true,
+          maintainAspectRatio: false,
           scales: {
             y: {
               beginAtZero: true,
               title: {
                 display: true,
                 text: '使用时长 (分钟) / 打开次数',
+                font: {
+                  size: 12
+                }
               },
+              ticks: {
+                font: {
+                  size: 10
+                }
+              }
             },
+            x: {
+              ticks: {
+                font: {
+                  size: 10
+                },
+                maxRotation: 45,
+                minRotation: 45
+              }
+            }
           },
           plugins: {
             title: {
               display: true,
               text: '应用使用统计',
+              font: {
+                size: 16
+              }
             },
+            legend: {
+              labels: {
+                font: {
+                  size: 11
+                }
+              }
+            }
           },
         },
       });
@@ -169,13 +204,23 @@ const UsageStatsChart: React.FC<Props> = ({ data, timeRange }) => {
         },
         options: {
           responsive: true,
+          maintainAspectRatio: false,
           plugins: {
             title: {
               display: true,
               text: '使用时间占比',
+              font: {
+                size: 16
+              }
             },
             legend: {
-              position: 'right',
+              position: 'bottom',
+              labels: {
+                font: {
+                  size: 10
+                },
+                padding: 8
+              }
             },
           },
         },
@@ -193,33 +238,71 @@ const UsageStatsChart: React.FC<Props> = ({ data, timeRange }) => {
 
   // 计算总使用时长
   const totalUsage = data.reduce((total, item) => total + item.totalTimeMs, 0);
+  const { labels, usageData, appIcons } = prepareData();
 
   return (
     <div>
-      <div className="bg-white rounded-lg p-4 mb-6 shadow-sm">
-        <h3 className="text-lg font-semibold mb-4">总览</h3>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-orange-50 p-4 rounded-md">
-            <p className="text-sm text-gray-600">总使用时长</p>
-            <p className="text-xl font-bold text-orange-600">
+      <div className="stats-card mb-4">
+        <h3 className="text-lg font-semibold mb-3">总览</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-orange-50 p-3 rounded-md">
+            <p className="text-xs text-gray-600">总使用时长</p>
+            <p className="text-lg font-bold text-orange-600">
               {formatTime(totalUsage)}
             </p>
           </div>
-          <div className="bg-orange-50 p-4 rounded-md">
-            <p className="text-sm text-gray-600">应用打开次数</p>
-            <p className="text-xl font-bold text-orange-600">
+          <div className="bg-orange-50 p-3 rounded-md">
+            <p className="text-xs text-gray-600">应用打开次数</p>
+            <p className="text-lg font-bold text-orange-600">
               {data.reduce((count, item) => count + item.openCount, 0)}次
             </p>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-lg p-4 shadow-sm">
-          <canvas ref={barChartRef}></canvas>
+      {/* 应用图标列表 */}
+      {labels.length > 0 && (
+        <div className="stats-card mb-4">
+          <h4 className="text-md font-semibold mb-3">主要应用</h4>
+          <div className="grid grid-cols-4 gap-3">
+            {labels.slice(0, 8).map((appName, index) => (
+              <div key={appName} className="flex flex-col items-center">
+                {appIcons[index] ? (
+                  <img
+                    src={appIcons[index]}
+                    alt={appName}
+                    className="w-10 h-10 rounded-lg mb-1"
+                  />
+                ) : (
+                  <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center mb-1">
+                    <span className="text-gray-500 text-xs font-bold">
+                      {appName.charAt(0)}
+                    </span>
+                  </div>
+                )}
+                <span className="text-xs text-gray-600 text-center truncate w-full">
+                  {appName}
+                </span>
+                <span className="text-xs text-orange-600 font-semibold">
+                  {Math.round(usageData[index])}分
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="bg-white rounded-lg p-4 shadow-sm">
-          <canvas ref={pieChartRef}></canvas>
+      )}
+
+      {/* 移动设备上垂直堆叠图表 */}
+      <div className="space-y-4">
+        <div className="stats-card">
+          <div className="chart-container-large">
+            <canvas ref={barChartRef}></canvas>
+          </div>
+        </div>
+        <div className="stats-card">
+          <div className="chart-container">
+            <canvas ref={pieChartRef}></canvas>
+          </div>
         </div>
       </div>
     </div>

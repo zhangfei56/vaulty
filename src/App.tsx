@@ -1,18 +1,26 @@
+import { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Provider } from 'react-redux';
 import { store } from './store';
-import Header from './components/common/Header';
-import Footer from './components/common/Footer';
+
 import Home from './pages/Home';
 import DiaryPage from './pages/DiaryPage';
 import TodoPage from './pages/TodoPage';
 import CalendarPage from './pages/CalendarPage';
 import StatsPage from './pages/StatsPage';
+import Header from './components/common/Header';
+import Footer from './components/common/Footer';
 import SettingsPage from './pages/SettingsPage';
 import MockDataPage from './pages/MockDataPage';
 import './test-typeorm'; // 导入TypeORM测试
+import { TypeORMManager } from './services/data-source/TypeORMManager';
 
 function App() {
+  useEffect(() => {
+    // 在应用启动时重置连接状态，避免连接冲突
+    TypeORMManager.resetConnectionState().catch(console.error);
+  }, []);
+
   return (
     <Provider store={store}>
       <Router>

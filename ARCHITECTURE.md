@@ -1,4 +1,4 @@
-# Vaulty2 架构设计
+# Vaulty 架构设计
 
 ## 一、数据流转过程
 
@@ -33,7 +33,7 @@
 ## 二、推荐文件层级结构
 
 ```
-vaulty2/
+vaulty/
 ├── public/
 │   └── index.html
 ├── src/
